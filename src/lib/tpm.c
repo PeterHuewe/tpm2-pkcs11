@@ -645,6 +645,10 @@ TPMI_ALG_HASH mech_to_hash_alg(CK_MECHANISM_TYPE mode) {
     case CKM_RSA_PKCS:
         return TPM2_ALG_NULL;
 
+    case CKM_SHA1_RSA_PKCS:
+    case CKM_SHA_1:
+        return TPM2_ALG_SHA1;
+
     case CKM_SHA256_RSA_PKCS:
     case CKM_SHA256:
         return TPM2_ALG_SHA256;
