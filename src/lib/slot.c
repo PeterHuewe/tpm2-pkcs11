@@ -216,6 +216,11 @@ CK_RV slot_mechanism_info_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE type, CK_ME
     }
 
     switch(type) {
+    case CKM_RSA_PKCS_OAEP:
+    case CKM_RSA_PKCS:
+        info->flags = 0;
+        break;
+
     case CKM_AES_KEY_GEN:
         info->ulMinKeySize = 128;
         info->ulMaxKeySize = 512;
