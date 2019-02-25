@@ -85,7 +85,6 @@
  */
 #define TOKEN_UNSUPPORTED \
         _TRACE_CALL; \
-        assert(0); \
         _TRACE_RET(CKR_FUNCTION_NOT_SUPPORTED); \
         return CKR_FUNCTION_NOT_SUPPORTED;
 
