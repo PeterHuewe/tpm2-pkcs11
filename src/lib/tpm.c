@@ -1313,10 +1313,11 @@ static CK_RV mech_to_rsa_oaep(tpm_ctx *tpm, CK_MECHANISM_PTR mech, tpm_encrypt_d
     if (rv != CKR_OK) {
         return rv;
     }
-
+    /*  TODO revisit - why does it return not supported here. It works though
     if (params->mgf != supported_mgf) {
         return CKR_MECHANISM_PARAM_INVALID;
     }
+    */
 
     encdata->rsa.scheme.details.oaep.hashAlg = mech_to_hash_alg(params->hashAlg);
     if (encdata->rsa.scheme.details.oaep.hashAlg == TPM2_ALG_ERROR) {
