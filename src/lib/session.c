@@ -157,10 +157,8 @@ CK_RV session_login(session_ctx *ctx, CK_USER_TYPE user_type,
         case CKU_SO:
             /* falls-through */
         case CKU_USER:
-            rv = token_login(tok, tpin, user_type);
-        break;
         case CKU_CONTEXT_SPECIFIC:
-            rv = CKR_USER_TYPE_INVALID;
+            rv = token_login(tok, tpin, user_type);
             break;
         default:
             rv = CKR_USER_TYPE_INVALID;
