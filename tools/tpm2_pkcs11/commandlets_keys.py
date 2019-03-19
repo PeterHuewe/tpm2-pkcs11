@@ -130,8 +130,8 @@ class NewKeyCommandBase(Command):
             pubmech = [
                 { CKM_RSA_X_509: "" },
                 { CKM_RSA_PKCS_OAEP: {
-                    "hashalg": CKM_SHA256,
-                    "mgf": CKG_MGF1_SHA256
+                    "hashalg": CKM_SHA1,
+                    "mgf": CKG_MGF1_SHA1,
                   }
                 },
                 { CKM_RSA_PKCS: "" }
@@ -140,8 +140,8 @@ class NewKeyCommandBase(Command):
             privmech = [
                 { CKM_RSA_X_509: "" },
                 { CKM_RSA_PKCS_OAEP: {
-                    "hashalg": CKM_SHA256,
-                    "mgf": CKG_MGF1_SHA256
+                    "hashalg": CKM_SHA1,
+                    "mgf": CKG_MGF1_SHA1,
                   }
                 },
                 { CKM_RSA_PKCS: "" }
