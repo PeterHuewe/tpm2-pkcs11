@@ -97,7 +97,7 @@ CK_RV token_get_info (token *t, CK_TOKEN_INFO *info) {
 
     // Support Flags
     info->flags = CKF_RNG
-        | CKF_LOGIN_REQUIRED;
+        | CKF_LOGIN_REQUIRED | CKA_ALWAYS_AUTHENTICATE;
 
     if (t->config.is_initialized) {
         info->flags |= CKF_TOKEN_INITIALIZED;
