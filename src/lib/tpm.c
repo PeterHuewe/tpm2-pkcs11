@@ -2030,6 +2030,12 @@ static CK_RV handle_sensitive(CK_ATTRIBUTE_PTR attr, CK_ULONG index, void *udata
 
     return handle_extractable_common(attr, false, udata);
 }
+static CK_RV handler_ignore (CK_ATTRIBUTE_PTR attr, CK_ULONG index, void *udata) {
+	(void) attr;
+	(void)index;
+	(void)udata;
+	return CKR_OK;
+}
 
 static const attr_handler tpm_handlers[] = {
     { CKA_TOKEN,           generic_bbool_true    },
@@ -2042,9 +2048,10 @@ static const attr_handler tpm_handlers[] = {
     { CKA_SIGN,            handle_encrypt        }, // SIGN_ENCRYPT are same in TPM, depends on SCHEME
     { CKA_MODULUS_BITS,    handle_modulus        },
     { CKA_PUBLIC_EXPONENT, handle_exp            },
-    { CKA_SENSITIVE,       handle_sensitive     },
+    { CKA_SENSITIVE,       handle_sensitive      },
     { CKA_CLASS,           handle_ckobject_class },
     { CKA_EXTRACTABLE,     handle_extractable    },
+    { CKA_KEY_TYPE,        handler_ignore        },
 };
 
 static const TPM2B_PUBLIC rsa_template = {
