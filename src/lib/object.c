@@ -464,6 +464,7 @@ CK_ATTRIBUTE_PTR object_get_priv_attr_full(tobject *tobj, CK_ATTRIBUTE_PTR attr)
 
 CK_RV object_get_attributes(session_ctx *ctx, CK_OBJECT_HANDLE object, CK_ATTRIBUTE *templ, CK_ULONG count) {
 
+    CK_RV ret = CKR_OK;
     token *tok = session_ctx_get_token(ctx);
     assert(tok);
 
@@ -501,11 +502,12 @@ CK_RV object_get_attributes(session_ctx *ctx, CK_OBJECT_HANDLE object, CK_ATTRIB
        } else {
            /* If it's not found it defaults to empty. */
            t->pValue = NULL;
-           t->ulValueLen = 0;
+           t->ulValueLen = CK_UNAVAILABLE_INFORMATION;
+           ret = CKR_ATTRIBUTE_TYPE_INVALID;
        }
     }
 
-    return CKR_OK;
+    return ret;
 }
 
 tobject *tobject_new(void) {

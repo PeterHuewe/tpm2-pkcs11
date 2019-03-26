@@ -118,7 +118,7 @@ static void verify_missing_rsa_pub_attrs(CK_SESSION_HANDLE session, CK_OBJECT_HA
 
 static void verify_missing_rsa_priv_attrs(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE h) {
 
-    CK_BYTE tmp[5][256] = { 0 };
+    CK_BYTE tmp[7][256] = { 0 };
 
     /*
      * Skip checking shared values until bug:
@@ -128,9 +128,14 @@ static void verify_missing_rsa_priv_attrs(CK_SESSION_HANDLE session, CK_OBJECT_H
     CK_ATTRIBUTE attrs[] = {
             ADD_ATTR_ARRAY(CKA_KEY_TYPE, tmp[0]),
             ADD_ATTR_ARRAY(CKA_CLASS, tmp[1]),
-            ADD_ATTR_ARRAY(CKA_ALWAYS_SENSITIVE,  tmp[2]),
-            ADD_ATTR_ARRAY(CKA_EXTRACTABLE,  tmp[3]),
-            ADD_ATTR_ARRAY(CKA_NEVER_EXTRACTABLE,  tmp[4]),
+            ADD_ATTR_ARRAY(CKA_ALWAYS_SENSITIVE, tmp[2]),
+	    /* CKA_TRUSTED is not valid for private objects, but
+	     * processing must still return CKR_OK even in that case
+	     * and return CKR_ATTRIBUTE_TYPE_INVALID and 
+	     * CK_UNAVAILABLE_INFORMATION for CKA_TRUSTED */
+            ADD_ATTR_ARRAY(CKA_TRUSTED, tmp[3]), 
+            ADD_ATTR_ARRAY(CKA_EXTRACTABLE, tmp[4]),
+            ADD_ATTR_ARRAY(CKA_NEVER_EXTRACTABLE, tmp[5]),
     };
 
     CK_RV rv = C_GetAttributeValue(session, h, attrs, ARRAY_LEN(attrs));
@@ -169,6 +174,12 @@ static void verify_missing_rsa_priv_attrs(CK_SESSION_HANDLE session, CK_OBJECT_H
             rv = generic_CK_BBOOL(a, &v);
             assert_int_equal(rv, CKR_OK);
             assert_int_equal(v, CK_TRUE);
+        } break;
+        case CKA_TRUSTED: {
+            CK_ULONG v = 0;
+            rv = generic_CK_ULONG(a, &v);
+            assert_int_equal(rv, CKR_ATTRIBUTE_TYPE_INVALID);
+            assert_int_equal(v, CK_UNAVAILABLE_INFORMATION);
         } break;
         default:
             assert_true(0);
