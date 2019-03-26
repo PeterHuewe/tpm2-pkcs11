@@ -218,6 +218,8 @@ static bool parse_attrs(const char *key, const char *value, size_t index, void *
         /* falls-thru */
     case CKA_TOKEN:
         /* falls-thru */
+    case CKA_ALWAYS_AUTHENTICATE:
+        /* falls-thru */
     case CKA_PRIVATE: {
         bool is_true = !strcasecmp(value, "true");
         bool is_false = !strcasecmp(value, "false");
@@ -1477,6 +1479,7 @@ twist attr_to_kvp(CK_ATTRIBUTE_PTR attrs, CK_ULONG count) {
         { CKA_EXTRACTABLE,       attr_generic_bool_handler     },
         { CKA_ALWAYS_SENSITIVE,  attr_generic_bool_handler     },
         { CKA_NEVER_EXTRACTABLE, attr_generic_bool_handler     },
+        { CKA_ALWAYS_AUTHENTICATE, attr_generic_bool_handler   },
     };
 
     twist attr_kvp = NULL;

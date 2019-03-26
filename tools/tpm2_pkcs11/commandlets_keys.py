@@ -152,6 +152,7 @@ class NewKeyCommandBase(Command):
         attrs.append({CKA_ALWAYS_SENSITIVE: True })
         attrs.append({CKA_EXTRACTABLE: False })
         attrs.append({CKA_NEVER_EXTRACTABLE: True })
+        attrs.append({CKA_ALWAYS_AUTHENTICATE: True })
 
         # Add keylabel for ALL objects if set
         if keylabel is not None:

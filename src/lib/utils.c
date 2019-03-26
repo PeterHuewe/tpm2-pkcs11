@@ -622,6 +622,7 @@ CK_RV utils_attr_deep_copy(CK_ATTRIBUTE_PTR attrs, CK_ULONG attr_count, CK_ATTRI
         { CKA_ALWAYS_SENSITIVE,  generic_attr_copy },
         { CKA_EXTRACTABLE,       generic_attr_copy },
         { CKA_NEVER_EXTRACTABLE, generic_attr_copy },
+        { CKA_ALWAYS_AUTHENTICATE, generic_attr_copy },
     };
 
     return utils_handle_attrs(deep_copy_attr_handlers, ARRAY_LEN(deep_copy_attr_handlers), attrs, attr_count, copy);
@@ -710,6 +711,7 @@ CK_RV utils_attr_free(CK_ATTRIBUTE_PTR attrs, CK_ULONG attr_count) {
         { CKA_NEVER_EXTRACTABLE, generic_attr_free },
         { CKA_VALUE_BITS,        generic_attr_free },
         { CKA_VALUE_LEN,         generic_attr_free },
+        { CKA_ALWAYS_AUTHENTICATE, generic_attr_free },
     };
 
     return utils_handle_attrs(free_attr_handlers, ARRAY_LEN(free_attr_handlers), attrs, attr_count, NULL);
