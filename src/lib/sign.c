@@ -56,6 +56,7 @@ static bool is_hashing_needed(CK_MECHANISM_TYPE mech) {
     case CKM_SHA512_RSA_PKCS:
     case CKM_ECDSA_SHA1:
         return true;
+    case CKM_ECDSA:
     case CKM_RSA_PKCS:
         return false;
     default:
@@ -82,6 +83,8 @@ static bool is_mech_supported(CK_MECHANISM_TYPE mech) {
     case CKM_SHA512_RSA_PKCS:
         /* falls-thru */
     case CKM_AES_CBC:
+        /* falls-thru */
+    case CKM_ECDSA:
         /* falls-thru */
     case CKM_ECDSA_SHA1:
         return true;
@@ -305,7 +308,6 @@ CK_RV sign_final_ex(session_ctx *ctx, CK_BYTE_PTR signature, CK_ULONG_PTR signat
     if (rv != CKR_OK) {
         return rv;
     }
-
     assert(opdata);
 
     token *tok = session_ctx_get_token(ctx);
@@ -425,6 +427,31 @@ CK_RV sign_final_ex(session_ctx *ctx, CK_BYTE_PTR signature, CK_ULONG_PTR signat
             goto session_out;
         }
     } else {
+        LOGE("%x, %x",hash, hash_len);
+        if (opdata->mtype == CKM_ECDSA){
+            assert(!hash);
+            assert(!hash_len);
+            assert(opdata->buffer);
+            assert(twist_len(opdata->buffer) >= 32);
+            hash_len = 32;// twist_len(opdata->buffer);
+            hash = malloc(hash_len);
+            if (!hash) {
+                LOGE("oom");
+                rv = CKR_HOST_MEMORY;
+                goto session_out;
+            }
+
+            memcpy (hash, opdata->buffer, hash_len);
+        }
+
+
+        LOGE("hashlen %p, %x",hash, hash_len);
+        fprintf(stderr, "\n");
+        for (unsigned int i =0 ; i <hash_len; i++){
+        fprintf(stderr, "%02x ", hash[i]);
+        }
+        fprintf(stderr, "\n");
+        LOGE("sglen %p, %x",signature, signature_len);
         rv = tpm_sign(tpm, opdata->tobj, opdata->mtype, hash, hash_len, signature, signature_len);
         if (rv != CKR_OK && rv != CKR_BUFFER_TOO_SMALL) {
             goto session_out;
@@ -482,11 +509,14 @@ session_out:
 
 CK_RV sign(session_ctx *ctx, CK_BYTE_PTR data, CK_ULONG data_len, CK_BYTE_PTR signature, CK_ULONG *signature_len) {
 
+    if (!signature){
+        *signature_len = 1000; // WORKAROUND / TODO, the caller wants to know the signature lenght
+        return CKR_OK;
+    }
     CK_RV rv = sign_update(ctx, data, data_len);
     if (rv != CKR_OK) {
         return rv;
     }
-
     return sign_final_ex(ctx, signature, signature_len, true);
 }
 

@@ -21,6 +21,8 @@
 #include <tss2/tss2_esys.h>
 #include <openssl/sha.h>
 
+extern TSS2_RC tpm_pub_to_ossl_pub(EC_GROUP *group, TPM2B_PUBLIC *key, EC_POINT **tpm_pub_key);
+
 #include "pkcs11.h"
 #include "log.h"
 #include "mutex.h"
@@ -663,6 +665,11 @@ TPMI_ALG_HASH mech_to_hash_alg(CK_MECHANISM_TYPE mode) {
 
     case CKM_ECDSA_SHA1:
         return TPM2_ALG_SHA1;
+    case CKM_ECDSA: 
+	// ECDSA is NOT using a hash.
+	// It needs a length (determined by the name of an hash alg) anyway.
+	// The length/hash_alg with correct length will be specified later.
+	return TPM2_ALG_NULL;
 
     default:
         return TPM2_ALG_ERROR;
@@ -677,6 +684,7 @@ TPM2_ALG_ID mech_to_sig_scheme(CK_MECHANISM_TYPE mode) {
     case CKM_SHA384_RSA_PKCS:
     case CKM_SHA512_RSA_PKCS:
         return TPM2_ALG_RSASSA;
+    case CKM_ECDSA:
     case CKM_ECDSA_SHA1:
         return TPM2_ALG_ECDSA;
     default:
@@ -688,11 +696,13 @@ bool get_signature_scheme(CK_MECHANISM_TYPE mech, TPMT_SIG_SCHEME *scheme) {
 
     TPM2_ALG_ID sig_scheme = mech_to_sig_scheme(mech);
     if (sig_scheme == TPM2_ALG_ERROR) {
+	    LOGE("sig");
         return false;
     }
 
     TPMI_ALG_HASH halg = mech_to_hash_alg(mech);
     if (halg == TPM2_ALG_ERROR) {
+	    LOGE("alg");
         return false;
     }
 
@@ -904,6 +914,29 @@ CK_RV tpm_sign(tpm_ctx *ctx, tobject *tobj, CK_MECHANISM_TYPE mech, CK_BYTE_PTR 
          */
         return CKR_GENERAL_ERROR;
     }
+
+    if (mech == CKM_ECDSA) {
+        LOGE("switching hash alg %d", datalen);
+        /* Infer hashAlg from dgst_len (taken from tpm2_engine) */
+        switch (datalen) {
+            case SHA_DIGEST_LENGTH:
+                in_scheme.details.ecdsa.hashAlg = TPM2_ALG_SHA1;
+                break;
+            case SHA256_DIGEST_LENGTH:
+                in_scheme.details.ecdsa.hashAlg = TPM2_ALG_SHA256;
+                break;
+            case SHA384_DIGEST_LENGTH:
+                in_scheme.details.ecdsa.hashAlg = TPM2_ALG_SHA384;
+                break;
+            case SHA512_DIGEST_LENGTH:
+                in_scheme.details.ecdsa.hashAlg = TPM2_ALG_SHA512;
+                break;
+            default:
+                LOGE("unkown digest length");
+                return CKR_GENERAL_ERROR;
+        }
+    }
+
 
     TPMT_TK_HASHCHECK validation = {
         .tag = TPM2_ST_HASHCHECK,
@@ -1914,6 +1947,23 @@ static CK_RV handle_modulus(CK_ATTRIBUTE_PTR attr, CK_ULONG index, void *udata) 
     return CKR_OK;
 }
 
+static CK_RV handle_ecparams(CK_ATTRIBUTE_PTR attr, CK_ULONG index, void *udata) {
+    UNUSED(index);
+    UNUSED(udata);
+    UNUSED(attr);
+    // TODO add real parsing based on X9.62 DER Encoding
+//    unsigned char secp224r1[] = {0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x21};
+/*    unsigned char fake_oid[] = { 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07 };
+    if (attr->ulValueLen != 10) {
+        LOGE("LEN did not match");
+        return CKR_ATTRIBUTE_VALUE_INVALID;
+    }
+    if (memcmp((unsigned char*) attr->pValue, fake_oid, 10) != 0)
+        return CKR_ATTRIBUTE_VALUE_INVALID;
+*/
+    return CKR_OK;
+}
+
 static CK_RV handle_encrypt(CK_ATTRIBUTE_PTR attr, CK_ULONG index, void *udata) {
     UNUSED(index);
 
@@ -2052,6 +2102,8 @@ static const attr_handler tpm_handlers[] = {
     { CKA_CLASS,           handle_ckobject_class },
     { CKA_EXTRACTABLE,     handle_extractable    },
     { CKA_KEY_TYPE,        handler_ignore        },
+    { CKA_EC_PARAMS,       handle_ecparams       }, // TODO PH
+    { CKA_EC_POINT,        handler_ignore        }, // TODO PH
 };
 
 static const TPM2B_PUBLIC rsa_template = {
@@ -2082,6 +2134,44 @@ static const TPM2B_PUBLIC rsa_template = {
         .unique.rsa = {
              .size = 0,
          },
+    },
+};
+
+static const TPM2B_PUBLIC ecc_template = {
+    .size = 0,
+    .publicArea = {
+        .type = TPM2_ALG_ECC,
+        .nameAlg = TPM2_ALG_SHA256,
+        .objectAttributes =
+            TPMA_OBJECT_FIXEDTPM
+            | TPMA_OBJECT_FIXEDPARENT
+            | TPMA_OBJECT_SENSITIVEDATAORIGIN
+            | TPMA_OBJECT_USERWITHAUTH
+            | TPMA_OBJECT_SIGN_ENCRYPT,
+        .authPolicy = {
+            .size = 0,
+        },
+        .parameters.eccDetail = {
+            .symmetric = {
+                .algorithm = TPM2_ALG_NULL,
+                .keyBits.aes = 0,
+                .mode.aes = 0,
+            },
+            .scheme = {
+                .scheme = TPM2_ALG_NULL,
+                .details = {
+                   // {.hashAlg = TPM2_ALG_SHA1}
+                }
+            },
+            .curveID = TPM2_ECC_NIST_P256,
+            .kdf = {.scheme =
+                TPM2_ALG_NULL,.details = {}
+            }
+        },
+        .unique.ecc = {
+            .x = {.size = 0,.buffer = {}},
+            .y = {.size = 0,.buffer = {}}
+        },
     },
 };
 
@@ -2154,8 +2244,11 @@ CK_RV tpm2_generate_key(
 
     assert(objdata);
 
-    if (mechanism->mechanism != CKM_RSA_PKCS_KEY_PAIR_GEN) {
-        LOGE("Only supports mechanism \"CKM_RSA_PKCS_KEY_PAIR_GEN\"");
+    if (mechanism->mechanism != CKM_RSA_PKCS_KEY_PAIR_GEN
+      &&  mechanism->mechanism != CKM_EC_KEY_PAIR_GEN
+        ) {
+        LOGE("Only supports mechanism \"CKM_RSA_PKCS_KEY_PAIR_GEN\" or"
+             "\"CKM_EC_KEY_PAIR_GEN\"");
         rv = CKR_MECHANISM_INVALID;
         goto out;
     }
@@ -2178,10 +2271,31 @@ CK_RV tpm2_generate_key(
     CK_ATTRIBUTE_PTR attrs[2]      = {pubattrs, privattrs};
     CK_ULONG cnt[ARRAY_LEN(attrs)] = {pubcnt,   privcnt};
 
-    tpm_key_data tpmdat = {
-        .priv = { 0 },
-        .pub  = rsa_template
-    };
+    tpm_key_data tpmdat = {.priv={ 0
+        /*
+        
+        .size = 4,
+        .sensitive = {
+            .userAuth = {
+                 .size = 0,
+                 .buffer = {0}
+             },
+            .data = {
+                .size = 0,
+                .buffer = {0}
+             }
+        },
+        */
+    },
+    };    
+        
+      //  .pub = ecc_template};
+
+    if (mechanism->mechanism == CKM_RSA_PKCS_KEY_PAIR_GEN) {
+        tpmdat.pub = rsa_template;
+    } else {
+        tpmdat.pub = ecc_template;
+    }
 
     /* populate tpmdat */
     CK_ULONG i;
@@ -2227,6 +2341,7 @@ CK_RV tpm2_generate_key(
         );
     if (rc != TSS2_RC_SUCCESS) {
         rv = CKR_GENERAL_ERROR;
+        LOGE("ERROR %x", rc);
         goto out;
     }
 
@@ -2274,19 +2389,78 @@ CK_RV tpm2_generate_key(
         goto out;
     }
 
-    assert(mechanism->mechanism == CKM_RSA_PKCS_KEY_PAIR_GEN);
+    if(mechanism->mechanism == CKM_RSA_PKCS_KEY_PAIR_GEN){
+        objdata->rsa.modulus = twistbin_new(
+                out_pub->publicArea.unique.rsa.buffer,
+                out_pub->publicArea.unique.rsa.size);
+        if (!objdata->rsa.modulus) {
+            LOGE("oom");
+            rv = CKR_HOST_MEMORY;
+            goto out;
+        }
 
-    objdata->rsa.modulus = twistbin_new(
-            out_pub->publicArea.unique.rsa.buffer,
-            out_pub->publicArea.unique.rsa.size);
-    if (!objdata->rsa.modulus) {
-        LOGE("oom");
-        rv = CKR_HOST_MEMORY;
-        goto out;
+        objdata->rsa.exponent = out_pub->publicArea.parameters.rsaDetail.exponent;
     }
+    else {
+        EC_GROUP *group = NULL;               /* Group defines the used curve */
+        EC_POINT *tpm_pub_key = NULL;         /* Public part of TPM key */
+        int curveId  ;
 
-    objdata->rsa.exponent = out_pub->publicArea.parameters.rsaDetail.exponent;
 
+
+        /* Set ossl constant for curve type and create group for curve */
+        switch (out_pub->publicArea.parameters.eccDetail.curveID) {
+            case TPM2_ECC_NIST_P192:
+                curveId = NID_X9_62_prime192v1;
+                break;
+            case TPM2_ECC_NIST_P224:
+                curveId = NID_secp224r1;
+                break;
+            case TPM2_ECC_NIST_P256:
+                curveId = NID_X9_62_prime256v1;
+                break;
+            case TPM2_ECC_NIST_P384:
+                curveId = NID_secp384r1;
+                break;
+            case TPM2_ECC_NIST_P521:
+                curveId = NID_secp521r1;
+                break;
+            default:
+                LOGE("ECC Curve not implemented");
+                return CKR_GENERAL_ERROR;
+        }
+
+
+        if (!(group = EC_GROUP_new_by_curve_name(curveId))) {
+            LOGE("EC_GROUP_new");
+            return CKR_GENERAL_ERROR;
+        }
+
+
+        if (tpm_pub_to_ossl_pub(group, out_pub, &tpm_pub_key)){
+            LOGE("ERROR tpm_pub_to_ossl");
+
+        }
+        //    point_conversion_form_t form = EC_GROUP_get_point_conversion_form (group);
+        BN_CTX *bctx ;
+        bctx = BN_CTX_new();  
+        unsigned char *mydata;
+        ssize_t len  = EC_POINT_point2buf(group, tpm_pub_key, POINT_CONVERSION_UNCOMPRESSED, &mydata, bctx);
+
+        char *padded_data = malloc (len+3);
+        padded_data[0] = 4;
+        padded_data[1] = len;
+        memcpy(&padded_data[2], mydata, len+1);
+
+        objdata->ecc.ecpoint = twistbin_new(
+                padded_data,
+                len+2);
+        if (!objdata->ecc.ecpoint) {
+            LOGE("oom");
+            rv = CKR_HOST_MEMORY;
+            goto out;
+        }
+    }
     objdata->privblob = tmppriv;
     objdata->pubblob = tmppub;
     objdata->handle = out_handle;

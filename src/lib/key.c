@@ -56,6 +56,15 @@
 
 UTILS_GENERIC_ATTR_TYPE_CONVERT(CK_BBOOL);
 
+CK_RV ecc_add_missing_mechs(tobject *tobj) {
+
+    CK_MECHANISM mechs[1] = {
+        { .mechanism = CKM_ECDSA,     .pParameter = NULL,         .ulParameterLen = 0                   },
+    };
+
+   return tobject_append_mechs(tobj, mechs, ARRAY_LEN(mechs));
+}
+
 CK_RV rsa_add_missing_mechs(tobject *tobj) {
 
     CK_RSA_PKCS_OAEP_PARAMS oaep_params = {
@@ -71,6 +80,112 @@ CK_RV rsa_add_missing_mechs(tobject *tobj) {
    return tobject_append_mechs(tobj, mechs, ARRAY_LEN(mechs));
 }
 
+static CK_RV ecc_add_missing_attrs(tobject *tobj, tpm_object_data *objdata) {
+
+    UNUSED(objdata);
+    CK_RV tmp_rv;
+    CK_RV rv = CKR_HOST_MEMORY;
+
+    CK_ULONG index = 0;
+    CK_ATTRIBUTE newattrs[9] = { 0 };
+
+    CK_ATTRIBUTE_PTR a = object_get_attribute_by_type(tobj, CKA_KEY_TYPE);
+    if (!a) {
+        ADD_ATTR(CK_KEY_TYPE, CKA_KEY_TYPE, CKK_EC, newattrs, index);
+    }
+
+    /*
+     * if their is no object class add it. This code doesn't check that public AND private
+     * are checked, which is needed in the design. We assume if empty, we need to add both
+     * and we assume if we find one, we will have the other.
+     */
+    CK_OBJECT_CLASS class = CKO_PRIVATE_KEY;
+    CK_ATTRIBUTE match = {
+       .type = CKA_CLASS,
+       .ulValueLen = sizeof(class),
+       .pValue = &class
+    };
+
+    a = object_get_attribute_full(tobj, &match);
+    if (!a) {
+        ADD_ATTR(CK_OBJECT_CLASS, CKA_CLASS, CKO_PRIVATE_KEY, newattrs, index);
+    }
+
+    class = CKO_PUBLIC_KEY;
+    a = object_get_attribute_full(tobj, &match);
+    if (!a) {
+        ADD_ATTR(CK_OBJECT_CLASS, CKA_CLASS, CKO_PUBLIC_KEY,  newattrs, index);
+    }
+
+    /* add a string byte array of the object id if no other id is specified */
+    a = object_get_attribute_by_type(tobj, CKA_ID);
+    if (!a) {
+        char tmp[32];
+        snprintf(tmp, sizeof(tmp), "%u", tobj->id);
+        ADD_ATTR_STR(CKA_ID, tmp, newattrs, index);
+    }
+    a = object_get_attribute_by_type(tobj, CKA_EC_POINT);
+    if (!a) {
+        ADD_ATTR_TWIST(CKA_EC_POINT, objdata->ecc.ecpoint, newattrs, index);
+    }
+
+    /*
+     * We come into the CKA_SENSITIVE and CKA_EXTRACTABLE block assuming that:
+     * CKA_EXTRACTABLE CKA_SENSITIVE
+     *              0 | 0 = error checked before thus not possible
+     *              0 | 1 = OK
+     *              1 | 0 = OK
+     *              1 | 1 = error checked before thus not possible
+     */
+    /* if the object is missing sensitive, the TPM defaults to sensitive, so mark it */
+
+    CK_BBOOL sensitive = CK_TRUE;
+    a = object_get_attribute_by_type(tobj, CKA_SENSITIVE);
+    if (!a) {
+        ADD_ATTR(CK_BBOOL, CKA_SENSITIVE, CK_TRUE, newattrs, index);
+    } else {
+        tmp_rv = generic_CK_BBOOL(a, &sensitive);
+        if (tmp_rv != CKR_OK) {
+            goto error;
+        }
+    }
+
+    /* mark always sensitive if not specified by user */
+    a = object_get_attribute_by_type(tobj, CKA_ALWAYS_SENSITIVE);
+    if (!a) {
+        ADD_ATTR(CK_BBOOL, CKA_ALWAYS_SENSITIVE, sensitive ? CK_TRUE : CK_FALSE, newattrs, index);
+    }
+
+    /* if the object is missing CKA_EXTRACTABLE use the value of CKA_SENSITIVE to determine */
+    CK_BBOOL extractable = CK_FALSE;
+    a = object_get_attribute_by_type(tobj, CKA_EXTRACTABLE);
+    if (!a) {
+        ADD_ATTR(CK_BBOOL, CKA_EXTRACTABLE, !sensitive, newattrs, index);
+    } else {
+        tmp_rv = generic_CK_BBOOL(a, &extractable);
+        if (tmp_rv != CKR_OK) {
+            goto error;
+        }
+    }
+
+    /* mark never extractable if not specified by user */
+    a = object_get_attribute_by_type(tobj, CKA_NEVER_EXTRACTABLE);
+    if (!a) {
+        ADD_ATTR(CK_BBOOL, CKA_NEVER_EXTRACTABLE, extractable ? CK_FALSE : CK_TRUE, newattrs, index);
+    }
+
+    /* add the new attrs */
+    rv = tobject_append_attrs(tobj, newattrs, index);
+
+error:
+    tmp_rv = utils_attr_free(newattrs, index);
+    if (tmp_rv != CKR_OK) {
+        LOGW("Could not free attributes");
+        assert(0);
+    }
+
+    return rv;
+}
 static CK_RV rsa_add_missing_attrs(tobject *tobj, tpm_object_data *objdata) {
 
     CK_RV tmp_rv;
@@ -374,7 +489,12 @@ CK_RV key_gen (
     /*
      * Need to convert the generation to mech to supported object mechs.
      */
-    rv = rsa_add_missing_attrs(new_tobj, &objdata);
+    if (mechanism->mechanism == CKM_RSA_PKCS_KEY_PAIR_GEN){
+	    rv = rsa_add_missing_attrs(new_tobj, &objdata);
+    }
+    else {
+	    rv = ecc_add_missing_attrs(new_tobj, &objdata);
+    }
     if (rv != CKR_OK) {
         LOGE("Failed to add missing rsa attrs");
         goto out;
@@ -384,17 +504,23 @@ CK_RV key_gen (
     tobject_set_blob_data(new_tobj, objdata.pubblob, objdata.privblob);
     tobject_set_handle(new_tobj, objdata.handle);
 
-    rv = rsa_add_missing_mechs(new_tobj);
+
+    if (mechanism->mechanism == CKM_RSA_PKCS_KEY_PAIR_GEN){
+        rv = rsa_add_missing_mechs(new_tobj);
+    } else {
+    	rv = ecc_add_missing_mechs(new_tobj);
+    }
+
     if (rv != CKR_OK) {
         LOGE("Failed to add missing rsa mechanisms");
         goto out;
     }
-
     rv = db_add_new_object(tok, new_tobj);
     if (rv != CKR_OK) {
         LOGE("Failed to add object to db");
         goto out;
     }
+
 
     /* add to object list preserving old object list if present */
     if (tok->tobjects) {

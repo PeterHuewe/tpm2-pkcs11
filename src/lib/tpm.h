@@ -132,6 +132,10 @@ struct tpm_object_data {
             twist modulus;
             uint32_t exponent;
         } rsa;
+	struct {
+	    twist ecparams;
+	    twist ecpoint;
+	} ecc;
     };
 
     twist pubblob;
