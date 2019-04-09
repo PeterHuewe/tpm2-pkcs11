@@ -190,6 +190,7 @@ class NewKeyCommandBase(Command):
         privattrs.append({CKA_ALWAYS_SENSITIVE: True })
         privattrs.append({CKA_EXTRACTABLE: False })
         privattrs.append({CKA_NEVER_EXTRACTABLE: True })
+        privattrs.append({CKA_ALWAYS_AUTHENTICATE: True })
 
         # Add keylabel for ALL objects if set
         if keylabel is not None:
