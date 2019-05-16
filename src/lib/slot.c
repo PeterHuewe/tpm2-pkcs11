@@ -12,6 +12,7 @@
 #include "slot.h"
 #include "token.h"
 #include "utils.h"
+#include "tpm.h"
 
 static struct {
     size_t token_cnt;
@@ -121,16 +122,19 @@ static const CK_MECHANISM_TYPE mechs[] = {
 };
 
 CK_RV slot_mechanism_list_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE *mechanism_list, CK_ULONG_PTR count) {
+    int supported = 0;
+    token *t;
 
-    if (!slot_get_token(slot_id)) {
+    t = slot_get_token(slot_id);
+    if (!t) {
         return CKR_SLOT_ID_INVALID;
     }
 
-    if (!count){
+    if (!count) {
         return CKR_ARGUMENTS_BAD;
     }
-
     if (!mechanism_list) {
+        // It is acceptable to request more storage than we might really need.
         *count = ARRAY_LEN(mechs);
         return CKR_OK;
     }
@@ -139,8 +143,132 @@ CK_RV slot_mechanism_list_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE *mechanism_
         return CKR_BUFFER_TOO_SMALL;
     }
 
-    *count = ARRAY_LEN(mechs);
-    memcpy(mechanism_list, mechs, sizeof(mechs));
+    TPMS_CAPABILITY_DATA *capabilityData;
+    if (tpm_get_algorithms (t->tctx, &capabilityData) != CKR_OK) {
+        return CKR_GENERAL_ERROR;
+    }
+
+    TPMU_CAPABILITIES *algs= &capabilityData->data;
+
+    for (unsigned int i = 0; i < ARRAY_LEN(mechs); i++){
+        switch (mechs[i]){
+            case CKM_AES_CBC:
+                if (is_algorithm_supported(algs, TPM2_ALG_CBC)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_AES_CFB1:
+                if (is_algorithm_supported(algs, TPM2_ALG_CFB)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_AES_ECB:
+                if (is_algorithm_supported(algs, TPM2_ALG_ECB)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_ECDSA:
+                if (is_algorithm_supported(algs, TPM2_ALG_ECDSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_ECDSA_SHA1:
+                if (is_algorithm_supported(algs, TPM2_ALG_ECDSA) &&
+                    is_algorithm_supported(algs, TPM2_ALG_SHA1)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_EC_KEY_PAIR_GEN:
+                if (is_algorithm_supported(algs, TPM2_ALG_ECC)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_RSA_PKCS:
+                if (is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_RSA_PKCS_KEY_PAIR_GEN:
+                if (is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_RSA_PKCS_OAEP:
+                if (is_algorithm_supported(algs, TPM2_ALG_OAEP)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_RSA_X_509:
+                if (is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+            case CKM_SHA_1:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA1)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA1_RSA_PKCS:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA1) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA256:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA256)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA256_RSA_PKCS:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA256) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA384:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA384)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA384_RSA_PKCS:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA384) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA512:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA512)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+            case CKM_SHA512_RSA_PKCS:
+                if (is_algorithm_supported(algs, TPM2_ALG_SHA512) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA)) {
+                    mechanism_list[supported] = mechs[i];
+                    supported++;
+                }
+                break;
+        }
+    }
+
+    *count = supported;
+    free(capabilityData);
 
     return CKR_OK;
 }

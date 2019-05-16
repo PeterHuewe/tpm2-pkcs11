@@ -22,6 +22,7 @@
 #include <tss2/tss2_esys.h>
 #include <tss2/tss2_mu.h>
 
+#include "checks.h"
 #include "openssl_compat.h"
 #include "pkcs11.h"
 #include "log.h"
@@ -2689,4 +2690,43 @@ void tpm_objdata_free(tpm_object_data *objdata) {
         assert(0);
     }
 
+}
+
+CK_RV tpm_get_algorithms (tpm_ctx *ctx, TPMS_CAPABILITY_DATA **capabilityData) {
+
+    TPM2_CAP capability = TPM2_CAP_ALGS;
+    UINT32 property = TPM2_ALG_FIRST;
+    UINT32 propertyCount = TPM2_MAX_CAP_ALGS;
+    TPMI_YES_NO moreData;
+
+    check_pointer(ctx);
+    check_pointer(*capabilityData);
+
+    TSS2_RC rval = Esys_GetCapability(ctx->esys_ctx,
+            ESYS_TR_NONE,
+            ESYS_TR_NONE,
+            ESYS_TR_NONE,
+            capability,
+            property, propertyCount, &moreData, capabilityData);
+
+    if (rval != TSS2_RC_SUCCESS) {
+        LOGE("Esys_GetCapability: 0x%x:", rval);
+        return CKR_GENERAL_ERROR;
+    }
+
+    if (!capabilityData) {
+        LOGE("TPM did not reply with correct amount of capabilities");
+        return CKR_GENERAL_ERROR;
+    }
+
+    return CKR_OK;
+}
+
+CK_BBOOL is_algorithm_supported(TPMU_CAPABILITIES *capabilities, TPM2_ALG_ID algorithm){
+    for (unsigned int i = 0 ; i < capabilities->algorithms.count ; i++){
+        if (capabilities->algorithms.algProperties[i].alg == algorithm){
+            return CK_TRUE;
+        }
+    }
+    return CK_FALSE;
 }
