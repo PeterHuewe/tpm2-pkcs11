@@ -2780,3 +2780,19 @@ CK_BBOOL tpm_algs_is_mechanism_supported(TPMU_CAPABILITIES *algs, CK_MECHANISM_T
 
     }
 }
+
+CK_BBOOL tpm_is_mechanism_supported(tpm_ctx *ctx, CK_MECHANISM_TYPE mechanism) {
+    check_pointer(ctx);
+    CK_BBOOL rv;
+
+    TPMS_CAPABILITY_DATA *capabilityData = NULL;
+    rv = tpm_get_algorithms (ctx, &capabilityData);
+    if (rv != CKR_OK) {
+        LOGE("Retrieving supported algorithms from TPM failed");
+        return rv;
+    }
+    TPMU_CAPABILITIES *algs= &capabilityData->data;
+    rv = tpm_algs_is_mechanism_supported(algs, mechanism);
+    free(capabilityData);
+    return rv;
+}

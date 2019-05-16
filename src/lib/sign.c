@@ -66,33 +66,6 @@ static bool is_hashing_needed(CK_MECHANISM_TYPE mech) {
     return false;
 }
 
-/*
- * XXX this is probably best to query the TPM layer
- */
-static bool is_mech_supported(CK_MECHANISM_TYPE mech) {
-
-    switch (mech) {
-    case CKM_RSA_PKCS:
-        /* falls-thru */
-    case CKM_SHA1_RSA_PKCS:
-        /* falls-thru */
-    case CKM_SHA256_RSA_PKCS:
-        /* falls-thru */
-    case CKM_SHA384_RSA_PKCS:
-        /* falls-thru */
-    case CKM_SHA512_RSA_PKCS:
-        /* falls-thru */
-    case CKM_AES_CBC:
-        /* falls-thru */
-    case CKM_ECDSA:
-        /* falls-thru */
-    case CKM_ECDSA_SHA1:
-        return true;
-        /* no default */
-    }
-
-    return false;
-}
 
 static CK_RV ec_fixup_size(CK_MECHANISM_TYPE mech, tobject *tobj, CK_ULONG_PTR signature_len) {
 
@@ -165,13 +138,12 @@ static CK_RV common_init(operation op, session_ctx *ctx, CK_MECHANISM_PTR mechan
 
     CK_RV rv = CKR_GENERAL_ERROR;
 
-    bool is_mech_sup = is_mech_supported(mechanism->mechanism);
-    if (!is_mech_sup) {
-        return CKR_MECHANISM_INVALID;
-    }
-
     token *tok = session_ctx_get_token(ctx);
     assert(tok);
+
+    if(!tpm_is_mechanism_supported(tok->tctx, mechanism->mechanism)) {
+        return CKR_MECHANISM_INVALID;
+    }
 
     digest_op_data *digest_opdata = NULL;
     bool do_hash = is_hashing_needed(mechanism->mechanism);
