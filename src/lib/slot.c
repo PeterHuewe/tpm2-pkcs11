@@ -12,6 +12,7 @@
 #include "slot.h"
 #include "token.h"
 #include "utils.h"
+#include "tpm.h"
 
 static struct {
     size_t token_cnt;
@@ -121,16 +122,20 @@ static const CK_MECHANISM_TYPE mechs[] = {
 };
 
 CK_RV slot_mechanism_list_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE *mechanism_list, CK_ULONG_PTR count) {
+    int supported = 0;
+    token *t;
+    CK_RV rv;
 
-    if (!slot_get_token(slot_id)) {
+    t = slot_get_token(slot_id);
+    if (!t) {
         return CKR_SLOT_ID_INVALID;
     }
 
-    if (!count){
+    if (!count) {
         return CKR_ARGUMENTS_BAD;
     }
-
     if (!mechanism_list) {
+        // It is acceptable to request more storage than we might really need.
         *count = ARRAY_LEN(mechs);
         return CKR_OK;
     }
@@ -139,8 +144,23 @@ CK_RV slot_mechanism_list_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE *mechanism_
         return CKR_BUFFER_TOO_SMALL;
     }
 
-    *count = ARRAY_LEN(mechs);
-    memcpy(mechanism_list, mechs, sizeof(mechs));
+    TPMS_CAPABILITY_DATA *capabilityData = NULL;
+    rv = tpm_get_algorithms (t->tctx, &capabilityData);
+    if (rv != CKR_OK) {
+        LOGE("Retrieving supported algorithms from TPM failed");
+        return rv;
+    }
+    TPMU_CAPABILITIES *algs= &capabilityData->data;
+
+    for (unsigned int i = 0; i < ARRAY_LEN(mechs); i++) {
+        if (tpm_algs_is_mechanism_supported(algs, mechs[i])) {
+            mechanism_list[supported] = mechs[i];
+            supported++;
+        }
+    }
+
+    *count = supported;
+    free(capabilityData);
 
     return CKR_OK;
 }

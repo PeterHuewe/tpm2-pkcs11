@@ -22,6 +22,7 @@
 #include <tss2/tss2_esys.h>
 #include <tss2/tss2_mu.h>
 
+#include "checks.h"
 #include "openssl_compat.h"
 #include "pkcs11.h"
 #include "log.h"
@@ -2689,4 +2690,93 @@ void tpm_objdata_free(tpm_object_data *objdata) {
         assert(0);
     }
 
+}
+
+CK_RV tpm_get_algorithms (tpm_ctx *ctx, TPMS_CAPABILITY_DATA **capabilityData) {
+
+    TPM2_CAP capability = TPM2_CAP_ALGS;
+    UINT32 property = TPM2_ALG_FIRST;
+    UINT32 propertyCount = TPM2_MAX_CAP_ALGS;
+    TPMI_YES_NO moreData;
+
+    check_pointer(ctx);
+    check_pointer(capabilityData);
+
+    TSS2_RC rval = Esys_GetCapability(ctx->esys_ctx,
+            ESYS_TR_NONE,
+            ESYS_TR_NONE,
+            ESYS_TR_NONE,
+            capability,
+            property, propertyCount, &moreData, capabilityData);
+
+    if (rval != TSS2_RC_SUCCESS) {
+        LOGE("Esys_GetCapability: 0x%x:", rval);
+        return CKR_GENERAL_ERROR;
+    }
+
+    if (!capabilityData) {
+        LOGE("TPM did not reply with correct amount of capabilities");
+        return CKR_GENERAL_ERROR;
+    }
+
+    return CKR_OK;
+}
+
+CK_BBOOL is_algorithm_supported(TPMU_CAPABILITIES *capabilities, TPM2_ALG_ID algorithm){
+    for (unsigned int i = 0 ; i < capabilities->algorithms.count ; i++){
+        if (capabilities->algorithms.algProperties[i].alg == algorithm){
+            return CK_TRUE;
+        }
+    }
+    return CK_FALSE;
+}
+
+CK_BBOOL tpm_algs_is_mechanism_supported(TPMU_CAPABILITIES *algs, CK_MECHANISM_TYPE mechanism) {
+    check_pointer(algs)
+    switch (mechanism){
+        case CKM_AES_CBC:
+            return is_algorithm_supported(algs, TPM2_ALG_CBC);
+        case CKM_AES_CFB1:
+            return is_algorithm_supported(algs, TPM2_ALG_CFB);
+        case CKM_AES_ECB:
+            return (is_algorithm_supported(algs, TPM2_ALG_ECB));
+        case CKM_ECDSA:
+            return (is_algorithm_supported(algs, TPM2_ALG_ECDSA));
+        case CKM_ECDSA_SHA1:
+            return (is_algorithm_supported(algs, TPM2_ALG_ECDSA) &&
+                    is_algorithm_supported(algs, TPM2_ALG_SHA1));
+        case CKM_EC_KEY_PAIR_GEN:
+            return (is_algorithm_supported(algs, TPM2_ALG_ECC));
+        case CKM_RSA_PKCS:
+            return (is_algorithm_supported(algs, TPM2_ALG_RSA));
+        case CKM_RSA_PKCS_KEY_PAIR_GEN:
+            return (is_algorithm_supported(algs, TPM2_ALG_RSA));
+        case CKM_RSA_PKCS_OAEP:
+            return (is_algorithm_supported(algs, TPM2_ALG_OAEP));
+        case CKM_RSA_X_509:
+            return (is_algorithm_supported(algs, TPM2_ALG_RSA));
+        case CKM_SHA_1:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA1));
+        case CKM_SHA1_RSA_PKCS:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA1) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA));
+        case CKM_SHA256:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA256));
+        case CKM_SHA256_RSA_PKCS:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA256) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA));
+        case CKM_SHA384:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA384));
+        case CKM_SHA384_RSA_PKCS:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA384) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA));
+        case CKM_SHA512:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA512));
+        case CKM_SHA512_RSA_PKCS:
+            return (is_algorithm_supported(algs, TPM2_ALG_SHA512) &&
+                    is_algorithm_supported(algs, TPM2_ALG_RSA));
+        default:
+            return CK_FALSE;
+
+    }
 }

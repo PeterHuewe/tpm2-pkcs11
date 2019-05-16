@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <tss2/tss2_tpm2_types.h>
+
 #include "object.h"
 #include "twist.h"
 #include "utils.h"
@@ -162,5 +164,9 @@ CK_RV tpm2_generate_key(
         CK_ATTRIBUTE_PTR privattrs,
 
         tpm_object_data *objdata);
+
+CK_RV tpm_get_algorithms (tpm_ctx *ctx, TPMS_CAPABILITY_DATA **capabilityData);
+CK_BBOOL is_algorithm_supported(TPMU_CAPABILITIES *capabilities, TPM2_ALG_ID algorithm);
+CK_BBOOL tpm_algs_is_mechanism_supported(TPMU_CAPABILITIES *algs, CK_MECHANISM_TYPE mechanism);
 
 #endif /* SRC_PKCS11_TPM_H_ */
