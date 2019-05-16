@@ -2700,7 +2700,7 @@ CK_RV tpm_get_algorithms (tpm_ctx *ctx, TPMS_CAPABILITY_DATA **capabilityData) {
     TPMI_YES_NO moreData;
 
     check_pointer(ctx);
-    check_pointer(*capabilityData);
+    check_pointer(capabilityData);
 
     TSS2_RC rval = Esys_GetCapability(ctx->esys_ctx,
             ESYS_TR_NONE,

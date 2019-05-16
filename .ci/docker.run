@@ -78,7 +78,8 @@ fi
 
 ../configure --enable-unit --enable-integration --enable-esapi-session-manage-flags $config_flags
 make -j$(nproc)
-make -j$(nproc) check
+TPM2_PKCS11_LOG_LEVEL=2 make -j$(nproc) check
+cat test/integration/pkcs-get-mechanism.log
 
 if [ "$CC" == "gcc" ] && [ "$PYTHON_INTERPRETER" == "python3" ]; then
     bash <(curl -s https://codecov.io/bash)

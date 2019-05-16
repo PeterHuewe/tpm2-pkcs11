@@ -124,6 +124,7 @@ static const CK_MECHANISM_TYPE mechs[] = {
 CK_RV slot_mechanism_list_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE *mechanism_list, CK_ULONG_PTR count) {
     int supported = 0;
     token *t;
+    CK_RV rv;
 
     t = slot_get_token(slot_id);
     if (!t) {
@@ -143,9 +144,14 @@ CK_RV slot_mechanism_list_get (CK_SLOT_ID slot_id, CK_MECHANISM_TYPE *mechanism_
         return CKR_BUFFER_TOO_SMALL;
     }
 
-    TPMS_CAPABILITY_DATA *capabilityData;
-    if (tpm_get_algorithms (t->tctx, &capabilityData) != CKR_OK) {
-        return CKR_GENERAL_ERROR;
+    TPMS_CAPABILITY_DATA *capabilityData = NULL;
+    LOGE("%p %p %p %d", t->tctx, capabilityData, &capabilityData, 0);
+    rv = tpm_get_algorithms (t->tctx, &capabilityData);
+    if (rv != CKR_OK) {
+    LOGE("%p %p %p %d", t->tctx, capabilityData, &capabilityData, rv);
+
+        LOGE("Retrieving supported algorithms from TPM failed");
+        return rv;
     }
 
     TPMU_CAPABILITIES *algs= &capabilityData->data;
