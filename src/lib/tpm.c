@@ -629,15 +629,9 @@ TPMI_ALG_HASH hashlen_to_alg_guess(CK_ULONG datalen) {
     switch (datalen) {
         case SHA_DIGEST_LENGTH:
             return TPM2_ALG_SHA1;
-        case SHA256_DIGEST_LENGTH:
-            return TPM2_ALG_SHA256;
-        case SHA384_DIGEST_LENGTH:
-            return TPM2_ALG_SHA384;
-        case SHA512_DIGEST_LENGTH:
-            return TPM2_ALG_SHA512;
         default:
             LOGE("unkown digest length");
-            return TPM2_ALG_ERROR;
+            return TPM2_ALG_SHA1;
     }
 }
 
@@ -1945,19 +1939,13 @@ static CK_RV handle_ecparams(CK_ATTRIBUTE_PTR attr, CK_ULONG index, void *udata)
 
     switch (nid) {
     case NID_X9_62_prime192v1:
-        ec->curveID = TPM2_ECC_NIST_P192;
-    break;
     case NID_secp224r1:
-        ec->curveID = TPM2_ECC_NIST_P224;
-    break;
+    case NID_secp384r1:
+    case NID_secp521r1:
+        LOGE("Unsupported nid to tpm EC algorithm mapping, got nid: %d", nid);
+        LOGE("!Using TPM2_ECC_NIST_P256 instead! nid %d ",NID_X9_62_prime256v1 );
     case NID_X9_62_prime256v1:
         ec->curveID = TPM2_ECC_NIST_P256;
-    break;
-    case NID_secp384r1:
-        ec->curveID = TPM2_ECC_NIST_P384;
-    break;
-    case NID_secp521r1:
-        ec->curveID = TPM2_ECC_NIST_P521;
     break;
     default:
         LOGE("Unsupported nid to tpm EC algorithm mapping, got nid: %d", nid);
@@ -2399,19 +2387,11 @@ static CK_RV tpm_object_data_populate_ecc(TPM2B_PUBLIC *out_pub, tpm_object_data
     /* Set ossl constant for curve type and create group for curve */
     switch (out_pub->publicArea.parameters.eccDetail.curveID) {
         case TPM2_ECC_NIST_P192:
-            curveId = NID_X9_62_prime192v1;
-            break;
-        case TPM2_ECC_NIST_P224:
-            curveId = NID_secp224r1;
-            break;
+        case TPM2_ECC_NIST_P384:
+        case TPM2_ECC_NIST_P521:
+            LOGE("ONLY P256 Curve supported! ");
         case TPM2_ECC_NIST_P256:
             curveId = NID_X9_62_prime256v1;
-            break;
-        case TPM2_ECC_NIST_P384:
-            curveId = NID_secp384r1;
-            break;
-        case TPM2_ECC_NIST_P521:
-            curveId = NID_secp521r1;
             break;
         default:
             LOGE("ECC Curve not implemented");
