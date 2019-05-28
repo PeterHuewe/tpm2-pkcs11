@@ -511,6 +511,7 @@ CK_RV sign_final_ex(session_ctx *ctx, CK_BYTE_PTR signature, CK_ULONG_PTR signat
             assert(opdata->buffer);
             hash_len = twist_len(opdata->buffer);
             assert(hash_len >= 20); /* Minimum for SHA1 */
+            hash_len = 20; /* TEMP for sha1*/
             hash = malloc(hash_len);
             if (!hash) {
                 LOGE("oom");
